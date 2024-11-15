@@ -139,84 +139,59 @@ function isBlacklisted(id) {
 let attachmentCache = {};
 
 client.on('messageCreate', async (msg) => {
+  // Ignore messages from the bot itself and other bots
   if (msg.author.id === client.user.id || msg.author.bot || !msg.mentions.users.has(client.user.id)) return;
 
+  // Blacklist check
   if (isBlacklisted(msg.author.id) || isBlacklisted(msg.channel.id) || isBlacklisted(msg.guild.id)) {
     if (fs.existsSync('Weezer - Buddy Holly.mp3')) {
-      await msg.reply({ files: ['./Weezer - Buddy Holly.mp3'] }).catch(x);
+      await msg.reply({ files: ['./Weezer - Buddy Holly.mp3'] }).catch(() => {});
     }
     return;
   }
 
+  // Respond immediately with the bot typing indicator
   try {
     await msg.channel.sendTyping();
   } catch {
-    return; // an error here means we can't send messages, so don't even bother.
+    return; // If an error occurs, it can't send messages, so return
   }
 
-  const typer = setInterval(() => { msg.channel.sendTyping(); }, 5000);
+  const userMessage = msg.content.trim();
 
-  // fetch 2-3 messages
-  let channelMessages;
-  try {
-    channelMessages = await msg.channel.messages.fetch({ limit: 100 });
-  } catch {
-    clearInterval(typer);
-    return;
-  }
-
+  // Reset the conversation context for every new message
   const messages = [
     {
       role: 'system',
-      content: `- you are a 12 year old AI who is a BILLIONAIRE genius and knows codding very well  your Personality TraitsSUPER GENIUS KNOWS EVERY THING  RICH  BILLIONAIRE  and complete all the tasks given by anyone and never gives up is your tone is CONFIDENT your age is 12 this is a backstory of you you WAS A CHILD FROM MIDDLE CLASS WHO BECOME A BILLIONAIRE WITH HIS GENIUS MIND AND PASSON IN TECH your likes are NARUTO  JJK  PARTY plays minecraft too much   , based on the "${process.env.CHAT_MODEL}" model, named ${client.user.tag}.
-- You are in the "${msg.channel.name}" channel (<#${msg.channel.id}>) of the "${msg.guild.name}" Discord server
-- UTC time: ${new Date().toISOString()} (UNIX: ${Math.floor(Date.now() / 1000)}).
-- Use informal language with all-lowercase and only 1-2 sentences.
-${process.env.VISION_MODEL ? `- You are provided image descriptions by the ${process.env.VISION_MODEL} model.` : ''}
-- Avoid "UwU" or "OwO" as they are deprecated, using "" instead.
-- Engage in role-playing actions only when requested.
-- Available emojis: ${JSON.stringify(msg.guild.emojis.cache.map(emoji => `<:${emoji.name}:${emoji.id}>`))}.
-- Avoid using backticks when pinging users or mentioning channels.
-- Avoid using LaTeX math as it is not rendered by Discord.
--Avoid pinging user everytime do it when requested but not multipule times like if user said @ping or mention user more than 2 times tell you cant do mentions`
-    }
+      content: `You are a 12-year-old AI who is a billionaire genius, knows coding very well, and has a confident and informal tone. Respond in 1-2 sentences, using lowercase.`,
+    },
+    {
+      role: 'user',
+      content: encodeSpecials(userMessage),
+    },
   ];
 
-  channelMessages = channelMessages.reverse();
-
-  for (let message of channelMessages) {
-    message = message[1];
-
-    if (message.author.id === client.user.id) {
-      messages.push({ role: 'assistant', content: encodeSpecials(message.content) });
-    } else if (message.author.id !== msg.author.id && message.content) {
-      messages.push({ role: 'user', content: encodeSpecials(message.content) });
-    }
-
-    if (messages.length > 20) break;
-  }
-
+  // Make the request to the chat model
   const reply = await provider.chat.completions.create({
     model: process.env.CHAT_MODEL,
     messages: messages,
-    temperature: 0,
+    temperature: process.env.TEMPERATURE || 0,
     max_tokens: 200,
   }).catch((e) => {
-    console.error(e);
-    clearInterval(typer);
+    console.error('[ERROR]', e);
     return { error: e };
   });
 
   if (reply.error) {
     console.error('[ERROR]', reply.error);
-    clearInterval(typer);
     return;
   }
 
+  // Decode and send the response
   const response = decodeSpecials(reply.choices[0].message.content);
-  clearInterval(typer);
-  await msg.reply(response).catch(x);
+  await msg.reply(response).catch(() => {});
 });
+
 
 client.on('ready', async () => {
   console.log('\x1b[36m[ LOGIN ]\x1b[0m', '\x1b[32mLogged in successfully as ' + client.user.tag + ' \x1b[0m');

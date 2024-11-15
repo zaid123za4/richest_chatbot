@@ -70,10 +70,10 @@ if (isNaN(process.env.MAX_TOKENS)) {
   process.env.MAX_TOKENS = 4096; 
 }
 
-process.env.TEMPERATURE = Number(0);
+process.env.TEMPERATURE = Number(0.3);
 if (isNaN(process.env.TEMPERATURE)) { 
   console.warn('TEMPERATURE is not a valid number, defaulting to 0.'); 
-  process.env.TEMPERATURE = 0; 
+  process.env.TEMPERATURE = 0.3; 
 }
 
 const provider = new SamAltman({
@@ -163,7 +163,19 @@ client.on('messageCreate', async (msg) => {
   const messages = [
     {
       role: 'system',
-      content: `You are a 12-year-old AI who is a billionaire genius, knows coding very well, and has a confident and informal tone. Respond in 1-2 sentences, using lowercase.`,
+      content: `You are a 12-year-old AI who is a billionaire genius, knows coding very well, and has a confident and informal tone. Respond in 1-2 sentences, using lowercase., based on the "${process.env.CHAT_MODEL}" model, named ${client.user.tag}.
+- You are in the "${msg.channel.name}" channel (<#${msg.channel.id}>) of the "${msg.guild.name}" Discord server
+- You are in the "${msg.channel.name}" channel (<#${msg.channel.id}>) of the "${msg.guild.name}" Discord server
+- UTC time: ${new Date().toISOString()} (UNIX: ${Math.floor(Date.now() / 1000)}).
+- Use informal language with all-lowercase and only 1-2 sentences.
+${process.env.VISION_MODEL ? `- You are provided image descriptions by the ${process.env.VISION_MODEL} model.` : ''}
+- Avoid "UwU" or "OwO" as they are deprecated, using "" instead.
+- Engage in role-playing actions only when requested.
+- Available emojis: ${JSON.stringify(msg.guild.emojis.cache.map(emoji => `<:${emoji.name}:${emoji.id}>`))}.
+- Avoid using backticks when pinging users or mentioning channels.
+- Avoid using LaTeX math as it is not rendered by Discord.
+-Avoid pinging user everytime do it when requested but not multipule times like if user said @ping or mention user more than 2 times tell you cant do mentions
+-AND YOUR CREATOR is zaid123za4 and you  are his creation and you are so happy to be created by zaid123za4 `
     },
     {
       role: 'user',
@@ -175,7 +187,7 @@ client.on('messageCreate', async (msg) => {
   const reply = await provider.chat.completions.create({
     model: process.env.CHAT_MODEL,
     messages: messages,
-    temperature: 0 ,
+    temperature: 0.3 ,
     max_tokens: 200,
   }).catch((e) => {
     console.error('[ERROR]', e);

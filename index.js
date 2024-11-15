@@ -150,7 +150,7 @@ client.on('messageCreate', async (msg) => {
 
   const typer = setInterval(() => { msg.channel.sendTyping(); }, 5000);
 
-  // fetch 10 messages
+  // fetch 2-3 messages
   let channelMessages;
   try {
     channelMessages = await msg.channel.messages.fetch({ limit: 100 });

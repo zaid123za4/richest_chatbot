@@ -97,7 +97,7 @@ await provider.models.list().then((models) => {
 
 // Set up express server
 const app = express();
-const port = 10000;
+const port = 4000;
 app.get('/', (req, res) => {
   const __dirname = path.dirname(new URL(import.meta.url).pathname);
 const imagePath = path.join(__dirname, 'index.html');

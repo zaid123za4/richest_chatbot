@@ -63,14 +63,14 @@ if (!process.env.API_KEY) { throw new Error('API_KEY is not set!' + m); }
 
 if (!process.env.CHAT_MODEL) { throw new Error('CHAT_MODEL is not set!' + m); }
 
-process.env.MAX_TOKENS = Number(process.env.MAX_TOKENS);
-process.env.MAX_TOKENS = Math.floor(process.env.MAX_TOKENS);
+process.env.MAX_TOKENS = Number(4096);
+process.env.MAX_TOKENS = Math.floor(4096);
 if (isNaN(process.env.MAX_TOKENS)) { 
   console.warn('MAX_TOKENS is not a valid integer, defaulting to 4096.'); 
   process.env.MAX_TOKENS = 4096; 
 }
 
-process.env.TEMPERATURE = Number(process.env.TEMPERATURE);
+process.env.TEMPERATURE = Number(0);
 if (isNaN(process.env.TEMPERATURE)) { 
   console.warn('TEMPERATURE is not a valid number, defaulting to 0.'); 
   process.env.TEMPERATURE = 0; 

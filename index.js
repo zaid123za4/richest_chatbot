@@ -214,6 +214,9 @@ client.on('ready', async () => {
 async function login() {
   try {
     await client.login(process.env.DISCORD_TOKEN);
+    setInterval(() => {
+      console.log("bot is online")
+    }, 5000);
     console.log('\x1b[36m[ LOGIN ]\x1b[0m', `Logged in as: ${client.user.tag} ✅`);
     console.log('\x1b[36m[ INFO ]\x1b[0m', `Bot ID: ${client.user.id}`);
     console.log('\x1b[36m[ INFO ]\x1b[0m', `Connected to ${client.guilds.cache.size} server(s)`);

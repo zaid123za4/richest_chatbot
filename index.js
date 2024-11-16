@@ -137,73 +137,12 @@ function isBlacklisted(id) {
 }
 
 let attachmentCache = {};
+
 client.on('messageCreate', async (msg) => {
   // Ignore messages from the bot itself and other bots
-  if (msg.author.id === client.user.id || msg.author.bot) return;
+  if (msg.author.id === client.user.id || msg.author.bot || !msg.mentions.users.has(client.user.id)) return;
 
-  // Handle Direct Messages (DMs)
-  if (msg.guild === null) {
-    // Respond immediately with the bot typing indicator in DMs
-    try {
-      await msg.channel.sendTyping();
-    } catch {
-      return;
-    }
-
-    const userMessage = msg.content.trim();
-
-    // Reset the conversation context for every new message in DMs
-    const messages = [
-      {
-        role: 'system',
-        content: `You are a 12-year-old boy who is a billionaire genius, knows coding very well, and has a confident and informal tone. Respond, using lowercase., and likes/plays minecraft too much that minecraft is everything, and he was born on 2011 July 21, based on the "${process.env.CHAT_MODEL}" model, named ${client.user.tag}.,
-
-- You are in the "${msg.channel.name}" channel (<#${msg.channel.id}>) of the "${msg.guild.name}" Discord server
-- You are in the "${msg.channel.name}" channel (<#${msg.channel.id}>) of the "${msg.guild.name}" Discord server
-- UTC time: ${new Date().toISOString()} (UNIX: ${Math.floor(Date.now() / 1000)}).
-- Use informal language with all-lowercase and only 1-2 sentences.
-${process.env.VISION_MODEL ? - You are provided image descriptions by the ${process.env.VISION_MODEL} model. : ''}
-- Avoid "UwU" or "OwO" as they are deprecated.
-- Engage in role-playing actions only when requested.
-- Available emojis: ${JSON.stringify(msg.guild.emojis.cache.map(emoji => <:${emoji.name}:${emoji.id}>))}.
-- Avoid using backticks when pinging users or mentioning channels.
-- Avoid using LaTeX math as it is not rendered by Discord.
--Avoid pinging user everytime do it when requested but not multipule times like if user said @ping or mention user more than 2 times tell you cant do mentions
--AND YOUR CREATOR is zaid123za4 and you  are his creation and you are so happy to be created by zaid123za4 
--And his Personality Traits is SUPER GENIUS KNOWS EVERY THING , RICH , BILLIONAIRE , and complete all the tasks given by anyone and never gives up.`
-      },
-      {
-        role: 'user',
-        content: encodeSpecials(userMessage),
-      },
-    ];
-
-    // Make the request to the chat model for DMs
-    const reply = await provider.chat.completions.create({
-      model: process.env.CHAT_MODEL,
-      messages: messages,
-      temperature: 0.3,
-      max_tokens: 200,
-    }).catch((e) => {
-      console.error('[ERROR]', e);
-      return { error: e };
-    });
-
-    if (reply.error) {
-      console.error('[ERROR]', reply.error);
-      return;
-    }
-
-    // Decode and send the response in DMs
-    const response = decodeSpecials(reply.choices[0].message.content);
-    await msg.reply(response).catch(() => {});
-    return; // Ensure DMs are handled separately
-  }
-
-  // Handle messages in servers (requires mention)
-  if (!msg.mentions.users.has(client.user.id)) return;
-
-  // Blacklist check for server messages
+  // Blacklist check
   if (isBlacklisted(msg.author.id) || isBlacklisted(msg.channel.id) || isBlacklisted(msg.guild.id)) {
     if (fs.existsSync('Weezer - Buddy Holly.mp3')) {
       await msg.reply({ files: ['./Weezer - Buddy Holly.mp3'] }).catch(() => {});
@@ -211,21 +150,21 @@ ${process.env.VISION_MODEL ? - You are provided image descriptions by the ${proc
     return;
   }
 
-  // Respond immediately with the bot typing indicator in servers
+  // Respond immediately with the bot typing indicator
   try {
     await msg.channel.sendTyping();
   } catch {
-    return;
+    return; // If an error occurs, it can't send messages, so return
   }
 
   const userMessage = msg.content.trim();
 
-  // Reset the conversation context for every 10 message in servers
-  const serverMessages = [
+  // Reset the conversation context for every new message
+  const messages = [
     {
       role: 'system',
-      content: `You are a 12-year-old boy who is a billionaire genius, knows coding very well, and has a confident and informal tone. Respond, using lowercase., and likes/plays minecraft too much that minecraft is everything, and he was born on 2011 July 21, based on the "${process.env.CHAT_MODEL}" model, named ${client.user.tag}.`,
-    - You are in the "${msg.channel.name}" channel (<#${msg.channel.id}>) of the "${msg.guild.name}" Discord server
+      content: `You are a 12-year-old boy who is a billionaire genius, knows coding very well, and has a confident and informal tone. Respond , using lowercase.,and likes/plays minecraft too much that minecraft i everything ,and he was born on 2011 july 21 ,based on the "${process.env.CHAT_MODEL}" model, named ${client.user.tag}.
+- You are in the "${msg.channel.name}" channel (<#${msg.channel.id}>) of the "${msg.guild.name}" Discord server
 - You are in the "${msg.channel.name}" channel (<#${msg.channel.id}>) of the "${msg.guild.name}" Discord server
 - UTC time: ${new Date().toISOString()} (UNIX: ${Math.floor(Date.now() / 1000)}).
 - Use informal language with all-lowercase and only 1-2 sentences.
@@ -237,37 +176,34 @@ ${process.env.VISION_MODEL ? `- You are provided image descriptions by the ${pro
 - Avoid using LaTeX math as it is not rendered by Discord.
 -Avoid pinging user everytime do it when requested but not multipule times like if user said @ping or mention user more than 2 times tell you cant do mentions
 -AND YOUR CREATOR is zaid123za4 and you  are his creation and you are so happy to be created by zaid123za4 
--And his Personality Traits is SUPER GENIUS KNOWS EVERY THING , RICH , BILLIONAIRE , and complete all the tasks given by anyone and never gives up.
--and the bot has free will thats means he can join any outgoing conversion and able to msg in dm.`
-    },
+-And his Personality Traits is SUPER GENIUS KNOWS EVERY THING , RICH , BILLIONAIRE , and complete all the tasks given by anyone and never gives up.`
+ },
     {
       role: 'user',
       content: encodeSpecials(userMessage),
     },
   ];
 
-  // Make the request to the chat model for server messages
-  const serverReply = await provider.chat.completions.create({
+  // Make the request to the chat model
+  const reply = await provider.chat.completions.create({
     model: process.env.CHAT_MODEL,
-    messages: serverMessages,
-    temperature: 0.3,
+    messages: messages,
+    temperature: 0.3 ,
     max_tokens: 200,
   }).catch((e) => {
     console.error('[ERROR]', e);
     return { error: e };
   });
 
-  if (serverReply.error) {
-    console.error('[ERROR]', serverReply.error);
+  if (reply.error) {
+    console.error('[ERROR]', reply.error);
     return;
   }
 
-  // Decode and send the response in servers
-  const serverResponse = decodeSpecials(serverReply.choices[0].message.content);
-  await msg.reply(serverResponse).catch(() => {});
+  // Decode and send the response
+  const response = decodeSpecials(reply.choices[0].message.content);
+  await msg.reply(response).catch(() => {});
 });
-
-
 
 
 client.on('ready', async () => {

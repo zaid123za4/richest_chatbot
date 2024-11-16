@@ -159,7 +159,7 @@ client.on('messageCreate', async (msg) => {
 
   const userMessage = msg.content.trim();
 
-  // Reset the conversation context for every new message
+  // Reset the conversation context for 100 new message
   const messages = [
     {
       role: 'system',

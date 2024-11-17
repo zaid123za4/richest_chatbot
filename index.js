@@ -130,7 +130,7 @@ client.on('messageCreate', async (msg) => {
     const reply = await provider.chat.completions.create({
       model: process.env.CHAT_MODEL,
       messages: messages,
-      temperature: 1.2,
+      temperature: 0 ,
       max_tokens: 4069,
     });
 

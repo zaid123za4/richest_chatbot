@@ -73,7 +73,7 @@ if (isNaN(process.env.MAX_TOKENS)) {
 process.env.TEMPERATURE = Number(0.3);
 if (isNaN(process.env.TEMPERATURE)) { 
   console.warn('TEMPERATURE is not a valid number, defaulting to 0.'); 
-  process.env.TEMPERATURE = 0.3; 
+  process.env.TEMPERATURE = 0.7; 
 }
 
 const provider = new SamAltman({
@@ -188,7 +188,7 @@ ${process.env.VISION_MODEL ? `- You are provided image descriptions by the ${pro
   const reply = await provider.chat.completions.create({
     model: process.env.CHAT_MODEL,
     messages: messages,
-    temperature: 0.3 ,
+    temperature: 0.7 ,
     max_tokens: 200,
   }).catch((e) => {
     console.error('[ERROR]', e);

@@ -130,8 +130,8 @@ client.on('messageCreate', async (msg) => {
     const reply = await provider.chat.completions.create({
       model: process.env.CHAT_MODEL,
       messages: messages,
-      temperature: 0.7,
-      max_tokens: 200,
+      temperature: 1.2,
+      max_tokens: 4069,
     });
 
     if (reply?.choices?.[0]?.message?.content) {

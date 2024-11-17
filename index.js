@@ -98,7 +98,7 @@ client.on('messageCreate', async (msg) => {
   messageCounters[userKey]++;
 
   const resetContext = messageCounters[userKey] >= 100;
-  if (resetContext) messageCounters[userKey] = 0; // Reset counter after reaching 100
+  if (resetContext) messageCounters[userKey] = 100; // Reset counter after reaching 100
 
   const messages = [
     {

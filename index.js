@@ -76,7 +76,7 @@ const client = new discord.Client({
 })
 
 // Your Discord User ID (update this with your actual Discord ID)
-const creatorID = 'your-discord-user-id' // Replace with your actual Discord User ID
+const creatorID = '1110864648787480656' // Replace with your actual Discord User ID
 
 // Function to handle shutdown
 const shutdown = async (i) => {

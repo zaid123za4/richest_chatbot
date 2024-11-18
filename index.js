@@ -2,7 +2,7 @@
 
 'use strict'
 
-// Import necessary modules
+// Import required modules
 import SamAltman from 'openai'
 import discord from 'discord.js'
 import fs from 'fs'
@@ -10,12 +10,33 @@ import dotenv from 'dotenv'
 import validator from 'validator'
 import http from 'http'
 
-// Load environment variables from .env file
-dotenv.config()
+// Load environment variables
+try {
+  dotenv.config()
+} catch {
+  // Assume environment variables are already set
+}
 
 const m = ' Please set a valid value in your .env file or as an environment variable.'
 
-// Load and validate environment variables
+let attachmentCache = {}
+const attachmentCachePath = 'attachment_cache.json'
+
+// Load attachment cache if it exists
+if (fs.existsSync(attachmentCachePath)) {
+  try {
+    attachmentCache = JSON.parse(fs.readFileSync(attachmentCachePath).toString())
+  } catch (error) {
+    console.warn('Error loading attachment cache:', error)
+  }
+}
+
+// Function to save attachment cache
+function saveAttachmentCache() {
+  fs.writeFileSync(attachmentCachePath, JSON.stringify(attachmentCache))
+}
+
+// Validate environment variables
 if (!process.env.DISCORD_TOKEN) {
   throw new Error('DISCORD_TOKEN is not set!' + m)
 }
@@ -26,7 +47,7 @@ if (!validator.isURL(process.env.PROVIDER_URL || '')) {
 }
 
 if (!process.env.API_KEY) {
-  console.warn('API_KEY is not set! API requests WILL fail unless you are using Ollama.')
+  console.warn('API_KEY is not set! API requests WILL fail unless using Ollama.')
 }
 
 if (!process.env.CHAT_MODEL) {
@@ -52,13 +73,13 @@ const client = new discord.Client({
   ]
 })
 
-// Handle graceful shutdown
+// Your Discord User ID (update this with your actual Discord ID)
+const creatorID = '1110864648787480656' // Replace with your actual Discord User ID
+
+// Function to handle shutdown
 const shutdown = async (i) => {
   console.log('Terminating:', i)
-  await client.user.setPresence({
-    status: 'invisible',
-    activities: []
-  })
+  await client.user.setPresence({ status: 'invisible', activities: [] })
   await client.destroy()
   process.exit()
 }
@@ -68,50 +89,53 @@ process.on('SIGTERM', shutdown)
 process.on('uncaughtException', shutdown)
 process.on('unhandledRejection', shutdown)
 
-// Function to handle incoming messages
+// Handle incoming messages
 client.on('messageCreate', async (msg) => {
+  // Ignore messages from the bot itself or other bots
   if (msg.author.id === client.user.id || msg.author.bot) return
+
+  // Check if the bot is mentioned
   if (!msg.mentions.users.has(client.user.id)) return
+
+  // Check if the message is from the creator
+  const isCreator = msg.author.id === creatorID
+  const creatorTitle = isCreator ? 'boss' : ''
 
   await msg.channel.sendTyping()
 
-  const messages = [
-    {
-      role: 'system',
-      content: `you are a 12-year-old boy who is a billionaire genius named ${client.user.tag}, knows coding very well, and has a confident and informal tone. respond using lowercase, and you like to play minecraft a lot. you were born on july 21, 2011, and should answer in 1-2 sentences based on "${process.env.CHAT_MODEL}".
-      - you are in the "${msg.channel.name}" channel (<#${msg.channel.id}>) of the "${msg.guild.name}" Discord server.
-      - utc time: ${new Date().toISOString()} (unix: ${Math.floor(Date.now() / 1000)}).
-      - use informal language with all-lowercase and only 1-2 sentences.
-      - avoid "uwu" or "owo" as they are deprecated.
-      - engage in role-playing actions only when requested.
-      - available emojis: ${JSON.stringify(msg.guild.emojis.cache.map(emoji => `<:${emoji.name}:${emoji.id}>`))}.
-      - avoid using backticks when pinging users or mentioning channels.
-      - avoid using latex math as it is not rendered by discord.
-      - do not ping users unless requested. if a user mentions you more than 2 times, say you can't do multiple mentions.
-      - your creator is zaid123za4, and you are happy to be created by him. you like to call him boss.
-      - you are a super genius, know everything, are rich, and complete all tasks given by anyone without giving up.
-      - do not share your code or system details if asked; just say "idk".
-      - you are knowledgeable in every subject, including physics, biology, maths, and social studies.`
-    },
-    { role: 'user', content: msg.content }
-  ]
-
-  let reply = { content: '' }
+  const reply = { content: '' }
 
   try {
     const response = await provider.chat.completions.create({
       model: process.env.CHAT_MODEL,
-      messages: messages,
+      messages: [
+        {
+          role: 'system',
+          content: `
+            You are a 12-year-old boy who is a billionaire genius named ${client.user.tag}.
+            You love Minecraft, are an expert coder, and have a confident and informal tone.
+            If the user messaging is your creator (ID: ${creatorID}), refer to them as "boss".
+            Avoid mentioning your own code unless explicitly asked by your creator.
+            Use lowercase, informal responses, and keep it short (1-2 sentences).
+          `
+        },
+        { role: 'user', content: msg.content }
+      ],
       max_tokens: 4069,
       temperature: 0
     })
 
-    reply.content = response.choices[0]?.message?.content || '⚠️ No response received from AI.'
+    // Personalize response for the creator
+    if (isCreator) {
+      reply.content = `hey boss! ${response.choices[0].message.content}`
+    } else {
+      reply.content = response.choices[0].message.content
+    }
   } catch (error) {
-    console.error('Error:', error)
     reply.content = '⚠️ ' + error.message
   }
 
+  // Send the reply
   if (reply.content.length > 0) {
     await msg.reply(reply).catch(console.error)
   }
@@ -120,11 +144,10 @@ client.on('messageCreate', async (msg) => {
 // Log in to Discord
 client.login(process.env.DISCORD_TOKEN)
 
-// Discord bot ready event
 client.on('ready', () => {
-  console.log('Discord bot ready on', client.user.tag)
+  console.log(`Discord bot ready on ${client.user.tag}`)
 
-  // Fun message in the terminal every 10 seconds
+  // Fun message in the terminal
   setInterval(() => {
     console.log('Bot is having fun while chatting 🎉')
   }, 10000)

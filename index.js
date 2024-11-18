@@ -56,8 +56,8 @@ if (!process.env.CHAT_MODEL) {
   throw new Error('CHAT_MODEL is not set!' + m)
 }
 
-process.env.MAX_TOKENS = Number(process.env.MAX_TOKENS) || 4096
-process.env.TEMPERATURE = Number(process.env.TEMPERATURE) || 0
+process.env.MAX_TOKENS = 4096
+process.env.TEMPERATURE = 0
 
 // Initialize OpenAI provider
 const provider = new SamAltman({
@@ -162,18 +162,16 @@ client.on('ready', () => {
 
 // Serve index.html using Express
 const app = express()
-const PORT = process.env.PORT || 3000
+const PORT = 3000 || 3000
 const __dirname = path.resolve()
 
 app.use(express.static('public'))
 
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'))
+  res.sendFile(path.join(__dirname,  index.html'))
 })
 
 // Start the HTTP server
 http.createServer(app).listen(PORT, () => {
   console.log(`HTTP server running on http://localhost:${PORT}`)
 })
-
-

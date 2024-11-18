@@ -135,7 +135,7 @@ client.on('messageCreate', async (msg) => {
     })
 
     if (isCreator) {
-      reply.content = `hey boss! ${response.choices[0].message.content}`
+      reply.content = ` boss! ${response.choices[0].message.content}`
     } else {
       reply.content = response.choices[0].message.content
     }

@@ -102,8 +102,8 @@ client.on('messageCreate', async (msg) => {
     const response = await provider.chat.completions.create({
       model: process.env.CHAT_MODEL,
       messages: messages,
-      max_tokens: process.env.MAX_TOKENS,
-      temperature: process.env.TEMPERATURE
+      max_tokens: 4069,
+      temperature: 0
     })
 
     reply.content = response.choices[0]?.message?.content || '⚠️ No response received from AI.'

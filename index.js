@@ -122,7 +122,7 @@ client.on('messageCreate', async (msg) => {
         },
         { role: 'user', content: msg.content }
       ],
-      max_tokens: 8192,
+      max_tokens: 8000,
       temperature: 0
     })
 

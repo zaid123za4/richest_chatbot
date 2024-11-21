@@ -14,8 +14,9 @@ const app = express();
 app.use(express.static('public'))
 
 app.listen(10000, () => {
-	console.log("listening on port 10000")
-}
+	console.log("listening on port 10000");
+});
+
 
 try {
   dotenv.config()

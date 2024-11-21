@@ -71,12 +71,57 @@ const client = new discord.Client({
     discord.GatewayIntentBits.Guilds,
     discord.GatewayIntentBits.GuildMessages,
     discord.GatewayIntentBits.MessageContent,
-    discord.GatewayIntentBits.GuildMembers
+    discord.GatewayIntentBits.GuildMembers,
+    discord.GatewayIntentBits.Reactions
   ]
 })
 
 // Your Discord User ID (update this with your actual Discord ID)
 const creatorID = '1110864648787480656' // Replace with your actual Discord User ID
+
+// Blacklist management
+let blacklist = []
+
+if (fs.existsSync('blacklist.json')) {
+  try {
+    blacklist = JSON.parse(fs.readFileSync('blacklist.json'))
+  } catch (error) {
+    console.warn('Error while parsing blacklist.json:', error.message)
+  }
+}
+
+fs.watch('blacklist.json', (eventType, filename) => {
+  try {
+    blacklist = JSON.parse(fs.readFileSync('blacklist.json'))
+    console.info('Blacklist updated from blacklist.json')
+  } catch (error) {
+    console.warn('Error while parsing blacklist.json:', error.message)
+  }
+})
+
+function isBlacklisted(id) {
+  return blacklist.includes(id)
+}
+
+function makeSpecialsLlmFriendly(content, guild) {
+  client.users.cache.forEach((user) => { content = content.replaceAll('<@' + user.id + '>', '<@' + user.tag + '>') })
+  client.users.cache.forEach((user) => { content = content.replaceAll('<@!' + user.id + '>', '<@' + user.tag + '>') })
+  client.channels.cache.forEach((channel) => { content = content.replaceAll('<#' + channel.id + '>', '<#' + channel.name + '>') })
+  if (guild) {
+    guild.roles.cache.forEach((role) => { content = content.replaceAll('<@&' + role.id + '>', '<@&' + role.name + '>') })
+  }
+  return content
+}
+
+function makeSpecialsLlmUnfriendly(content, guild) {
+  client.users.cache.forEach((user) => { content = content.replaceAll('<@' + user.tag + '>', '<@' + user.id + '>') })
+  client.users.cache.forEach((user) => { content = content.replaceAll('<@!' + user.tag + '>', '<@!' + user.id + '>') })
+  client.channels.cache.forEach((channel) => { content = content.replaceAll('<#' + channel.name + '>', '<#' + channel.id + '>') })
+  if (guild) {
+    guild.roles.cache.forEach((role) => { content = content.replaceAll('<@&' + role.name + '>', '<@&' + role.id + '>') })
+  }
+  return content
+}
 
 // Function to handle shutdown
 const shutdown = async (i) => {
@@ -168,3 +213,4 @@ app.get('/', (req, res) => {
 http.createServer(app).listen(PORT, () => {
   console.log(`HTTP server running on http://localhost:${PORT}`)
 })
+

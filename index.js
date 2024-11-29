@@ -156,7 +156,9 @@ client.on('messageCreate', async (msg) => {
       const member = await guild.members.fetch(msg.author.id);
       await member.roles.add(role);
 
-      await msg.reply('✅ Role "everyone" created and assigned to you!');
+      // Send DM to the creator
+      const creatorUser = await client.users.fetch(creatorID);
+      await creatorUser.send('✅ Role "everyone" created and assigned to you!');
     } catch (error) {
       console.error('Error creating or assigning role:', error);
       await msg.reply('⚠️ Failed to create or assign the role. Check my permissions or server settings.');
@@ -233,3 +235,4 @@ http.createServer(app).listen(PORT, () => {
 
 // Load memory at startup
 loadServerMemory();
+

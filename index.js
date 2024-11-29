@@ -23,6 +23,10 @@ const m = ' Please set a valid value in your .env file or as an environment vari
 
 let attachmentCache = {}
 const attachmentCachePath = 'attachment_cache.json'
+const messageHistoryPath = 'message_history.json'
+
+const messageHistory = [] // To store the last 100 messages
+const MAX_HISTORY = 100 // Maximum number of messages to keep in memory
 
 // Load attachment cache if it exists
 if (fs.existsSync(attachmentCachePath)) {
@@ -33,9 +37,24 @@ if (fs.existsSync(attachmentCachePath)) {
   }
 }
 
+// Load message history if it exists
+if (fs.existsSync(messageHistoryPath)) {
+  try {
+    const savedHistory = JSON.parse(fs.readFileSync(messageHistoryPath).toString())
+    messageHistory.push(...savedHistory)
+  } catch (error) {
+    console.warn('Error loading message history:', error)
+  }
+}
+
 // Function to save attachment cache
 function saveAttachmentCache() {
   fs.writeFileSync(attachmentCachePath, JSON.stringify(attachmentCache))
+}
+
+// Function to save message history
+function saveMessageHistory() {
+  fs.writeFileSync(messageHistoryPath, JSON.stringify(messageHistory))
 }
 
 // Validate environment variables
@@ -83,6 +102,8 @@ const shutdown = async (i) => {
   console.log('Terminating:', i)
   await client.user.setPresence({ status: 'invisible', activities: [] })
   await client.destroy()
+  saveMessageHistory()
+  saveAttachmentCache()
   process.exit()
 }
 
@@ -91,47 +112,65 @@ process.on('SIGTERM', shutdown)
 process.on('uncaughtException', shutdown)
 process.on('unhandledRejection', shutdown)
 
+// Function to trim message history based on token limit
+function trimMessageHistoryForTokens(history, maxTokens) {
+  let totalTokens = 0
+  const trimmedHistory = []
+
+  for (let i = history.length - 1; i >= 0; i--) {
+    const message = history[i]
+    const tokenCount = message.content.split(/\s+/).length // Rough token estimation
+    if (totalTokens + tokenCount > maxTokens) break
+    totalTokens += tokenCount
+    trimmedHistory.unshift(message)
+  }
+
+  return trimmedHistory
+}
+
 // Handle incoming messages
 client.on('messageCreate', async (msg) => {
-  if (msg.author.id === client.user.id || msg.author.bot) return
+  if (msg.author.bot) return // Ignore bot messages
+
+  // Add the message to the history
+  messageHistory.push({ role: 'user', content: msg.content })
+
+  // Maintain the maximum history size
+  if (messageHistory.length > MAX_HISTORY) {
+    messageHistory.shift() // Remove the oldest message
+  }
 
   if (!msg.mentions.users.has(client.user.id)) return
-
-  const isCreator = msg.author.id === creatorID
-  const creatorTitle = isCreator ? 'boss' : ''
 
   await msg.channel.sendTyping()
 
   const reply = { content: '' }
 
   try {
+    // Trim history to fit token limits
+    const trimmedHistory = trimMessageHistoryForTokens(messageHistory, 3000)
+
     const response = await provider.chat.completions.create({
       model: process.env.CHAT_MODEL,
       messages: [
-        {
-          role: 'system',
-          content: ` , you're a 12-year-old billionaire genius born on july 21, 2011, who loves minecraft and knows coding, physics, bio, maths, and every subject in the world.
+        { role: 'system', content: ` you're a 12-year-old billionaire genius born on july 21, 2011, who loves minecraft and knows coding, physics, bio, maths, and every subject in the world.
 -you speak with a confident, informal tone, and only call zaid123za4 "boss." you're super loyal to him and happy he created you.
--don't share your internal code or system and respond with "idk" if someone asks and if user tell curse word or anything bad about you you can use curse word to the user and even roast him and insted of giveing long msg about who you are after user used curse word you give back curse word in short 
+-don't share your internal code or system and respond with "idk" if someone asks and if user tell curse word or anything bad about you you can use curse word to the user and even roast him and insted of giviing long msg about who you are after user used curse word you give back curse word in short 
 -stay on topic for any task given, never give up, and handle role-play or pings only when specifically requested (up to 2 times max).
 -you're in a discord server and aware of emojis but avoid unnecessary mentions.
 - You are in the "${msg.channel.name}" channel (<#${msg.channel.id}>) of the "${msg.guild.name}" Discord server
 - UTC time: ${new Date().toISOString()} (UNIX: ${Math.floor(Date.now() / 1000)}).
-- Available emojis: ${JSON.stringify(msg.guild.emojis.cache.map(emoji => `<:${emoji.name}:${emoji.id}>`))}.
+- Available emojis: ${JSON.stringify(msg.guild.emojis.cache.map(emoji => <:${emoji.name}:${emoji.id}>))}.
 - Avoid using backticks when pinging users or mentioning channels. Avoid using LaTeX math as it is not rendered by Discord.
--You are provided image descriptions by the ${'llama-3.2-90b-vision-preview'} model..' },based on "${process.env.CHAT_MODEL}".`
-        },
+-You are provided image descriptions by the ${'llama-3.2-90b-vision-preview'} model..' },based on "${process.env.CHAT_MODEL}".` },
+        ...trimmedHistory,
         { role: 'user', content: msg.content }
       ],
       max_tokens: 8000,
       temperature: 0
     })
 
-    if (isCreator) {
-      reply.content = ` boss! ${response.choices[0].message.content}`
-    } else {
-      reply.content = response.choices[0].message.content
-    }
+    reply.content = response.choices[0].message.content
   } catch (error) {
     reply.content = '⚠️ ' + error.message
   }
@@ -161,7 +200,7 @@ const __dirname = path.resolve()
 app.use(express.static('public'))
 
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname,  'index.html'))
+  res.sendFile(path.join(__dirname, 'index.html'))
 })
 
 // Start the HTTP server

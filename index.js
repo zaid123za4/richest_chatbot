@@ -157,7 +157,7 @@ client.on('messageCreate', async (msg) => {
 - You are in the "${msg.channel.name}" channel (<#${msg.channel.id}>) of the "${msg.guild.name}" Discord server
 - UTC time: ${new Date().toISOString()} (UNIX: ${Math.floor(Date.now() / 1000)}).
 - Avoid using backticks when pinging users or mentioning channels. Avoid using LaTeX math as it is not rendered by Discord.
--You are provided image descriptions by the ${'llama-3.2-90b-vision-preview'} model..' },based on "${process.env.CHAT_MODEL}".` }, },
+-You are provided image descriptions by the ${'llama-3.2-90b-vision-preview'} model..' },based on "${process.env.CHAT_MODEL}".` },
         ...trimmedHistory,
         { role: 'user', content: msg.content },
       ],

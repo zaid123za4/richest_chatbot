@@ -2,7 +2,6 @@
 
 'use strict';
 
-// Import required modules
 import SamAltman from 'openai';
 import discord from 'discord.js';
 import fs from 'fs/promises';
@@ -12,14 +11,13 @@ import http from 'http';
 import express from 'express';
 import path from 'path';
 
-// Load environment variables
 dotenv.config();
 
 const MAX_HISTORY = 100;
 const serverMemoryPath = 'server_message_history.json';
 const serverMessageHistory = {};
 
-// Load server-specific memory if it exists
+// Load memory from file
 async function loadServerMemory() {
   try {
     const data = await fs.readFile(serverMemoryPath, 'utf-8');
@@ -29,7 +27,7 @@ async function loadServerMemory() {
   }
 }
 
-// Save server-specific memory to file
+// Save memory to file
 async function saveServerMemory() {
   try {
     await fs.mkdir(path.dirname(serverMemoryPath), { recursive: true });
@@ -39,11 +37,14 @@ async function saveServerMemory() {
   }
 }
 
-function getServerHistory(serverId) {
+function getUserHistory(serverId, userId) {
   if (!serverMessageHistory[serverId]) {
-    serverMessageHistory[serverId] = [];
+    serverMessageHistory[serverId] = {};
   }
-  return serverMessageHistory[serverId];
+  if (!serverMessageHistory[serverId][userId]) {
+    serverMessageHistory[serverId][userId] = [];
+  }
+  return serverMessageHistory[serverId][userId];
 }
 
 function trimMessageHistoryForTokens(history, maxTokens) {
@@ -61,34 +62,22 @@ function trimMessageHistoryForTokens(history, maxTokens) {
   return trimmedHistory;
 }
 
-// Validate environment variables
-if (!process.env.DISCORD_TOKEN) {
-  throw new Error('DISCORD_TOKEN is not set! Please set it in your .env file.');
-}
-
+if (!process.env.DISCORD_TOKEN) throw new Error('DISCORD_TOKEN is not set!');
 if (!validator.isURL(process.env.PROVIDER_URL || '')) {
   console.warn('PROVIDER_URL is not valid. Using default OpenAI endpoint.');
   process.env.PROVIDER_URL = '';
 }
-
-if (!process.env.API_KEY) {
-  console.warn('API_KEY is not set. API requests may fail.');
-}
-
-if (!process.env.CHAT_MODEL) {
-  throw new Error('CHAT_MODEL is not set! Please define it in .env.');
-}
+if (!process.env.API_KEY) console.warn('API_KEY is not set.');
+if (!process.env.CHAT_MODEL) throw new Error('CHAT_MODEL is not set!');
 
 process.env.MAX_TOKENS = 4096;
 process.env.TEMPERATURE = 0.7;
 
-// Initialize OpenAI provider
 const provider = new SamAltman({
   apiKey: process.env.API_KEY,
   baseURL: process.env.PROVIDER_URL,
 });
 
-// Initialize Discord client
 const client = new discord.Client({
   intents: [
     discord.GatewayIntentBits.Guilds,
@@ -119,25 +108,25 @@ client.on('messageCreate', async (msg) => {
   if (msg.author.bot || !msg.guild) return;
 
   const serverId = msg.guild.id;
-  const history = getServerHistory(serverId);
+  const userId = msg.author.id;
   const content = msg.content.trim();
 
-  // Reset history command
-  if (content.toLowerCase() === '/reset') {
-    serverMessageHistory[serverId] = [];
-    await msg.reply('✅ Memory for this server has been reset.');
+  // Reset all user memories in this server
+  if (content.toLowerCase() === '$reset') {
+    serverMessageHistory[serverId] = {};
+    await msg.reply('✅ All user memories for this server have been reset.');
     return;
   }
 
-  // If not mentioned, skip
   if (!msg.mentions.users.has(client.user.id)) return;
 
   await msg.channel.sendTyping();
 
   try {
     const sanitizedInput = validator.escape(content);
-    history.push({ role: 'user', content: sanitizedInput });
+    const history = getUserHistory(serverId, userId);
 
+    history.push({ role: 'user', content: sanitizedInput });
     if (history.length > MAX_HISTORY) history.shift();
 
     const trimmedHistory = trimMessageHistoryForTokens(history, 3000);
@@ -158,8 +147,8 @@ client.on('messageCreate', async (msg) => {
         ...trimmedHistory,
         { role: 'user', content: sanitizedInput },
       ],
-      max_tokens: Number(process.env.MAX_TOKENS) || 4096,
-      temperature: Number(process.env.TEMPERATURE) || 0.7,
+      max_tokens: Number(process.env.MAX_TOKENS),
+      temperature: Number(process.env.TEMPERATURE),
     });
 
     const reply = response.choices[0]?.message?.content || '⚠️ Empty response';
@@ -181,11 +170,7 @@ const PORT = process.env.PORT || 3000;
 const __dirname = path.resolve();
 
 app.use(express.static('public'));
-
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 app.get('/health', (req, res) => res.send('✅ Bot is running'));
 http.createServer(app).listen(PORT, () => {
   console.log(`Web server at http://localhost:${PORT}`);

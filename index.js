@@ -42,7 +42,10 @@ function getUserHistory(serverId, userId) {
     serverMessageHistory[serverId] = {};
   }
   if (!serverMessageHistory[serverId][userId]) {
-    serverMessageHistory[serverId][userId] = [];
+    serverMessageHistory[serverId][userId] = {
+      history: [],
+      personality: '',
+    };
   }
   return serverMessageHistory[serverId][userId];
 }
@@ -118,18 +121,27 @@ client.on('messageCreate', async (msg) => {
     return;
   }
 
+  const userData = getUserHistory(serverId, userId);
+
+  // Handle $set {behavior}
+  if (content.toLowerCase().startsWith('$set ')) {
+    const behavior = content.slice(5).trim();
+    userData.personality = behavior;
+    await msg.reply(`✅ Your behavior has been set to: "${behavior}"`);
+    return;
+  }
+
   if (!msg.mentions.users.has(client.user.id)) return;
 
   await msg.channel.sendTyping();
 
   try {
     const sanitizedInput = validator.escape(content);
-    const history = getUserHistory(serverId, userId);
 
-    history.push({ role: 'user', content: sanitizedInput });
-    if (history.length > MAX_HISTORY) history.shift();
+    userData.history.push({ role: 'user', content: sanitizedInput });
+    if (userData.history.length > MAX_HISTORY) userData.history.shift();
 
-    const trimmedHistory = trimMessageHistoryForTokens(history, 3000);
+    const trimmedHistory = trimMessageHistoryForTokens(userData.history, 3000);
 
     const response = await provider.chat.completions.create({
       model: process.env.CHAT_MODEL,
@@ -137,13 +149,15 @@ client.on('messageCreate', async (msg) => {
         {
           role: 'system',
           content: `You are an intelligent assistant. Be direct, concise, and professional. Prioritize clarity and usefulness over friendliness or filler. Do not flatter or overexplain.
--When asked for creative or emotional responses, stay grounded. Provide value, not fluff.
--If the user asks for a joke, roast, or banter — deliver sharply and briefly, then return to normal behavior.
--Never repeat yourself, and never speak unless there's something worth saying.
+- When asked for creative or emotional responses, stay grounded. Provide value, not fluff.
+- If the user asks for a joke, roast, or banter — deliver sharply and briefly, then return to normal behavior.
+- Never repeat yourself, and never speak unless there's something worth saying.
 .
--Right now, you’re chatting in channel "${msg.channel.name}" on the "${msg.guild.name}" server.
--Time: UTC ${new Date().toISOString()}, UNIX ${Math.floor(Date.now() / 1000)}.
-.`,
+Current user personality: "${userData.personality || 'default professional'}".
+.
+You are chatting in channel "${msg.channel.name}" on the "${msg.guild.name}" server.
+Time: UTC ${new Date().toISOString()}, UNIX ${Math.floor(Date.now() / 1000)}.
+`,
         },
         ...trimmedHistory,
         { role: 'user', content: sanitizedInput },

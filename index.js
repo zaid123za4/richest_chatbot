@@ -180,10 +180,10 @@ client.on('messageCreate', async (msg) => {
       messages: [
         {
           role: 'system',
-          content: `You are an intelligent assistant. Be direct, concise, and professional.
-Current user personality: "${personality}".
-Channel: "${msg.channel.name}", Server: "${msg.guild.name}".
-Time: UTC ${new Date().toISOString()}, UNIX ${Math.floor(Date.now() / 1000)}.`,
+          content: `u are an ai . be profinashional and respond in long only when need 
+-Current user personality: "${personality}" respond according to user personlity.
+-Channel: "${msg.channel.name}", Server: "${msg.guild.name}".
+-Time: UTC ${new Date().toISOString()}, UNIX ${Math.floor(Date.now() / 1000)}.`,
         },
         ...trimmedHistory,
         { role: 'user', content: sanitizedInput },

@@ -1,21 +1,32 @@
-#!/usr/bin/node
-
+#!/usr/bin/env node
 'use strict';
 
 import SamAltman from 'openai';
 import discord from 'discord.js';
 import fs from 'fs/promises';
+import fssync from 'fs';
 import dotenv from 'dotenv';
 import validator from 'validator';
 import http from 'http';
 import express from 'express';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 dotenv.config();
 
+// Paths
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const serverMemoryPath = './server_message_history.json';
+const behaviorDBPath = './database.json';
+
+// Discord Config
 const MAX_HISTORY = 100;
-const serverMemoryPath = 'server_message_history.json';
+const creatorID = '1110864648787480656';
+
+// Server & Memory
 const serverMessageHistory = {};
+let behaviorDB = {};
 
 // Load memory from file
 async function loadServerMemory() {
@@ -23,20 +34,32 @@ async function loadServerMemory() {
     const data = await fs.readFile(serverMemoryPath, 'utf-8');
     Object.assign(serverMessageHistory, JSON.parse(data));
   } catch (error) {
-    console.warn('No memory loaded:', error.message);
+    console.warn('No server memory loaded:', error.message);
+  }
+
+  try {
+    if (fssync.existsSync(behaviorDBPath)) {
+      behaviorDB = JSON.parse(fssync.readFileSync(behaviorDBPath));
+    } else {
+      fssync.writeFileSync(behaviorDBPath, JSON.stringify({}, null, 2));
+    }
+  } catch (error) {
+    console.warn('No behavior database loaded:', error.message);
   }
 }
 
-// Save memory to file
+// Save memory
 async function saveServerMemory() {
   try {
     await fs.mkdir(path.dirname(serverMemoryPath), { recursive: true });
     await fs.writeFile(serverMemoryPath, JSON.stringify(serverMessageHistory));
+    fssync.writeFileSync(behaviorDBPath, JSON.stringify(behaviorDB, null, 2));
   } catch (error) {
-    console.error('Failed to save memory:', error);
+    console.error('Memory save error:', error);
   }
 }
 
+// Helper Functions
 function getUserHistory(serverId, userId) {
   if (!serverMessageHistory[serverId]) {
     serverMessageHistory[serverId] = {};
@@ -52,35 +75,35 @@ function getUserHistory(serverId, userId) {
 
 function trimMessageHistoryForTokens(history, maxTokens) {
   let totalTokens = 0;
-  const trimmedHistory = [];
-
+  const trimmed = [];
   for (let i = history.length - 1; i >= 0; i--) {
-    const message = history[i];
-    const tokenCount = message.content.split(/\s+/).length;
+    const msg = history[i];
+    const tokenCount = msg.content.split(/\s+/).length;
     if (totalTokens + tokenCount > maxTokens) break;
     totalTokens += tokenCount;
-    trimmedHistory.unshift(message);
+    trimmed.unshift(msg);
   }
-
-  return trimmedHistory;
+  return trimmed;
 }
 
-if (!process.env.DISCORD_TOKEN) throw new Error('DISCORD_TOKEN is not set!');
+// ENV validation
+if (!process.env.DISCORD_TOKEN) throw new Error('❌ DISCORD_TOKEN is not set!');
+if (!process.env.API_KEY) console.warn('⚠️ API_KEY is not set.');
+if (!process.env.CHAT_MODEL) throw new Error('❌ CHAT_MODEL is not set!');
 if (!validator.isURL(process.env.PROVIDER_URL || '')) {
-  console.warn('PROVIDER_URL is not valid. Using default OpenAI endpoint.');
+  console.warn('⚠️ PROVIDER_URL is not valid. Using default OpenAI endpoint.');
   process.env.PROVIDER_URL = '';
 }
-if (!process.env.API_KEY) console.warn('API_KEY is not set.');
-if (!process.env.CHAT_MODEL) throw new Error('CHAT_MODEL is not set!');
-
 process.env.MAX_TOKENS = 4096;
 process.env.TEMPERATURE = 0.7;
 
+// OpenAI
 const provider = new SamAltman({
   apiKey: process.env.API_KEY,
   baseURL: process.env.PROVIDER_URL,
 });
 
+// Discord Bot
 const client = new discord.Client({
   intents: [
     discord.GatewayIntentBits.Guilds,
@@ -90,22 +113,10 @@ const client = new discord.Client({
   ],
 });
 
-const creatorID = '1110864648787480656';
-
-const shutdown = async (reason) => {
-  console.log('Shutting down:', reason);
-  await saveServerMemory();
-  try {
-    await client.user.setPresence({ status: 'invisible', activities: [] });
-    await client.destroy();
-  } catch (e) {}
-  process.exit();
-};
-
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
-process.on('uncaughtException', shutdown);
-process.on('unhandledRejection', shutdown);
+client.on('ready', () => {
+  console.log(`🤖 Logged in as ${client.user.tag}`);
+  setInterval(() => console.log('✅ Bot heartbeat'), 10000);
+});
 
 client.on('messageCreate', async (msg) => {
   if (msg.author.bot || !msg.guild) return;
@@ -113,51 +124,61 @@ client.on('messageCreate', async (msg) => {
   const serverId = msg.guild.id;
   const userId = msg.author.id;
   const content = msg.content.trim();
+  const args = content.split(/ +/);
+  const command = args.shift().toLowerCase();
 
-  // Reset all user memories in this server
-  if (content.toLowerCase() === '$reset') {
+  // $reset
+  if (command === '$reset') {
     serverMessageHistory[serverId] = {};
-    await msg.reply('✅ All user memories for this server have been reset.');
+    await msg.reply('🧠 All user memories for this server have been reset.');
     return;
   }
 
-  const userData = getUserHistory(serverId, userId);
-
-  // Handle $set {behavior}
-  if (content.toLowerCase().startsWith('$set ')) {
-    const behavior = content.slice(5).trim();
-    userData.personality = behavior;
-    await msg.reply(`✅ Your behavior has been set to: "${behavior}"`);
-    return;
+  // $set [behavior]
+  if (command === '$set') {
+    const behavior = args.join(' ');
+    if (!behavior) return msg.reply('❌ Please provide a behavior. Usage: `$set [behavior]`');
+    behaviorDB[userId] = { behavior };
+    await fs.writeFile(behaviorDBPath, JSON.stringify(behaviorDB, null, 2));
+    return msg.reply(`✅ Your behavior has been set to: "${behavior}"`);
   }
 
+  // $mybehavior
+  if (command === '$mybehavior') {
+    const userBehavior = behaviorDB[userId]?.behavior || 'none';
+    return msg.reply(`🧠 Your current behavior is: "${userBehavior}"`);
+  }
+
+  // $data (OWNER ONLY)
+  if (command === '$data') {
+    if (userId !== creatorID) return msg.reply('❌ You are not authorized to use this command.');
+    return msg.channel.send({ files: [behaviorDBPath] });
+  }
+
+  // Handle chat if bot is mentioned
   if (!msg.mentions.users.has(client.user.id)) return;
 
   await msg.channel.sendTyping();
 
   try {
     const sanitizedInput = validator.escape(content);
-
+    const userData = getUserHistory(serverId, userId);
     userData.history.push({ role: 'user', content: sanitizedInput });
     if (userData.history.length > MAX_HISTORY) userData.history.shift();
 
     const trimmedHistory = trimMessageHistoryForTokens(userData.history, 3000);
+
+    const personality = behaviorDB[userId]?.behavior || 'default professional';
 
     const response = await provider.chat.completions.create({
       model: process.env.CHAT_MODEL,
       messages: [
         {
           role: 'system',
-          content: `You are an intelligent assistant. Be direct, concise, and professional. Prioritize clarity and usefulness over friendliness or filler. Do not flatter or overexplain.
-- When asked for creative or emotional responses, stay grounded. Provide value, not fluff.
-- If the user asks for a joke, roast, or banter — deliver sharply and briefly, then return to normal behavior.
-- Never repeat yourself, and never speak unless there's something worth saying.
-.
-Current user personality: "${userData.personality || 'default professional'}".
-.
-You are chatting in channel "${msg.channel.name}" on the "${msg.guild.name}" server.
-Time: UTC ${new Date().toISOString()}, UNIX ${Math.floor(Date.now() / 1000)}.
-`,
+          content: `You are an intelligent assistant. Be direct, concise, and professional.
+Current user personality: "${personality}".
+Channel: "${msg.channel.name}", Server: "${msg.guild.name}".
+Time: UTC ${new Date().toISOString()}, UNIX ${Math.floor(Date.now() / 1000)}.`,
         },
         ...trimmedHistory,
         { role: 'user', content: sanitizedInput },
@@ -166,33 +187,40 @@ Time: UTC ${new Date().toISOString()}, UNIX ${Math.floor(Date.now() / 1000)}.
       temperature: Number(process.env.TEMPERATURE),
     });
 
-    const reply = response.choices[0]?.message?.content || '⚠️ Empty response';
+    const reply = response.choices[0]?.message?.content || '⚠️ Empty response.';
     await msg.reply(reply);
   } catch (err) {
-    console.error('Message error:', err);
-    await msg.reply('⚠️ Something went wrong. Please try again.');
+    console.error('❌ AI error:', err);
+    await msg.reply('⚠️ Something went wrong.');
   }
 });
 
-client.on('ready', () => {
-  console.log(`Bot is online as ${client.user.tag}`);
-  setInterval(() => console.log('Bot is vibing!'), 10000);
-});
-
-// Express web server
+// Express Web Server
 const app = express();
 const PORT = process.env.PORT || 3000;
-const __dirname = path.resolve();
-
 app.use(express.static('public'));
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
-app.get('/health', (req, res) => res.send('✅ Bot is running'));
-http.createServer(app).listen(PORT, () => {
-  console.log(`Web server at http://localhost:${PORT}`);
-});
+app.get('/', (_, res) => res.sendFile(path.join(__dirname, 'index.html')));
+app.get('/health', (_, res) => res.send('✅ Bot is healthy'));
+http.createServer(app).listen(PORT, () =>
+  console.log(`🌐 Web server running at http://localhost:${PORT}`)
+);
 
-// Start everything
-(async () => {
-  await loadServerMemory();
-  await client.login(process.env.DISCORD_TOKEN);
-})();
+// Graceful Shutdown
+const shutdown = async (reason) => {
+  console.log('🔻 Shutting down:', reason);
+  await saveServerMemory();
+  try {
+    await client.user.setPresence({ status: 'invisible', activities: [] });
+    await client.destroy();
+  } catch {}
+  process.exit();
+};
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
+process.on('uncaughtException', shutdown);
+process.on('unhandledRejection', shutdown);
+
+// Start
+await loadServerMemory();
+await client.login(process.env.DISCORD_TOKEN);

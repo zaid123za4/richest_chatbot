@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
+// Imports
 import SamAltman from 'openai';
 import discord from 'discord.js';
 import fs from 'fs/promises';
@@ -20,21 +21,32 @@ const __dirname = path.dirname(__filename);
 const serverMemoryPath = './server_message_history.json';
 const behaviorDBPath = './database.json';
 
-// Discord Config
+// ENV validation
+if (!process.env.DISCORD_TOKEN) throw new Error('❌ DISCORD_TOKEN is not set!');
+if (!process.env.API_KEY) console.warn('⚠️ API_KEY is not set.');
+if (!process.env.CHAT_MODEL) throw new Error('❌ CHAT_MODEL is not set!');
+if (!validator.isURL(process.env.PROVIDER_URL || '')) {
+  console.warn('⚠️ PROVIDER_URL is not valid. Using default OpenAI endpoint.');
+  process.env.PROVIDER_URL = '';
+}
+process.env.MAX_TOKENS = 4096;
+process.env.TEMPERATURE = 0.7;
+
+// Constants
 const MAX_HISTORY = 100;
 const creatorID = '1110864648787480656';
 
-// Server & Memory
+// Memory
 const serverMessageHistory = {};
 let behaviorDB = {};
 
-// Load memory from file
+// Load Memory
 async function loadServerMemory() {
   try {
     const data = await fs.readFile(serverMemoryPath, 'utf-8');
     Object.assign(serverMessageHistory, JSON.parse(data));
-  } catch (error) {
-    console.warn('No server memory loaded:', error.message);
+  } catch (err) {
+    console.warn('No server memory loaded:', err.message);
   }
 
   try {
@@ -43,27 +55,25 @@ async function loadServerMemory() {
     } else {
       fssync.writeFileSync(behaviorDBPath, JSON.stringify({}, null, 2));
     }
-  } catch (error) {
-    console.warn('No behavior database loaded:', error.message);
+  } catch (err) {
+    console.warn('No behavior database loaded:', err.message);
   }
 }
 
-// Save memory
+// Save Memory
 async function saveServerMemory() {
   try {
     await fs.mkdir(path.dirname(serverMemoryPath), { recursive: true });
     await fs.writeFile(serverMemoryPath, JSON.stringify(serverMessageHistory));
     fssync.writeFileSync(behaviorDBPath, JSON.stringify(behaviorDB, null, 2));
-  } catch (error) {
-    console.error('Memory save error:', error);
+  } catch (err) {
+    console.error('Memory save error:', err);
   }
 }
 
-// Helper Functions
+// Helpers
 function getUserHistory(serverId, userId) {
-  if (!serverMessageHistory[serverId]) {
-    serverMessageHistory[serverId] = {};
-  }
+  if (!serverMessageHistory[serverId]) serverMessageHistory[serverId] = {};
   if (!serverMessageHistory[serverId][userId]) {
     serverMessageHistory[serverId][userId] = {
       history: [],
@@ -86,24 +96,13 @@ function trimMessageHistoryForTokens(history, maxTokens) {
   return trimmed;
 }
 
-// ENV validation
-if (!process.env.DISCORD_TOKEN) throw new Error('❌ DISCORD_TOKEN is not set!');
-if (!process.env.API_KEY) console.warn('⚠️ API_KEY is not set.');
-if (!process.env.CHAT_MODEL) throw new Error('❌ CHAT_MODEL is not set!');
-if (!validator.isURL(process.env.PROVIDER_URL || '')) {
-  console.warn('⚠️ PROVIDER_URL is not valid. Using default OpenAI endpoint.');
-  process.env.PROVIDER_URL = '';
-}
-process.env.MAX_TOKENS = 4096;
-process.env.TEMPERATURE = 0.7;
-
-// OpenAI
+// OpenAI Provider
 const provider = new SamAltman({
   apiKey: process.env.API_KEY,
   baseURL: process.env.PROVIDER_URL,
 });
 
-// Discord Bot
+// Discord Client
 const client = new discord.Client({
   intents: [
     discord.GatewayIntentBits.Guilds,
@@ -113,11 +112,13 @@ const client = new discord.Client({
   ],
 });
 
+// Bot Ready
 client.on('ready', () => {
   console.log(`🤖 Logged in as ${client.user.tag}`);
   setInterval(() => console.log('✅ Bot heartbeat'), 10000);
 });
 
+// Message Handler
 client.on('messageCreate', async (msg) => {
   if (msg.author.bot || !msg.guild) return;
 
@@ -143,23 +144,28 @@ client.on('messageCreate', async (msg) => {
     return msg.reply(`✅ Your behavior has been set to: "${behavior}"`);
   }
 
-  // $mybehavior
-  if (command === '$mybehavior') {
-    const userBehavior = behaviorDB[userId]?.behavior || 'none';
-    return msg.reply(`🧠 Your current behavior is: "${userBehavior}"`);
+  // $get
+  if (command === '$get') {
+    const b = behaviorDB[userId]?.behavior || 'none';
+    return msg.reply(`🧠 Your current behavior is: "${b}"`);
   }
 
-  // $data (OWNER ONLY)
+  // $mybehavior
+  if (command === '$mybehavior') {
+    const b = behaviorDB[userId]?.behavior || 'none';
+    return msg.reply(`🧠 Your current behavior is: "${b}"`);
+  }
+
+  // $data
   if (command === '$data') {
     if (userId !== creatorID) return msg.reply('❌ You are not authorized to use this command.');
     return msg.channel.send({ files: [behaviorDBPath] });
   }
 
-  // Handle chat if bot is mentioned
+  // Mention-triggered AI response
   if (!msg.mentions.users.has(client.user.id)) return;
 
   await msg.channel.sendTyping();
-
   try {
     const sanitizedInput = validator.escape(content);
     const userData = getUserHistory(serverId, userId);
@@ -167,7 +173,6 @@ client.on('messageCreate', async (msg) => {
     if (userData.history.length > MAX_HISTORY) userData.history.shift();
 
     const trimmedHistory = trimMessageHistoryForTokens(userData.history, 3000);
-
     const personality = behaviorDB[userId]?.behavior || 'default professional';
 
     const response = await provider.chat.completions.create({
